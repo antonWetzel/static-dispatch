@@ -1,0 +1,26 @@
+[workspace]
+members = [".", "macros", "tests/extern_crate"]
+package.version = "0.1.0"
+package.edition = "2024"
+
+[workspace.dependencies]
+static-dispatch = { path = "." }
+macros = { path = "macros" }
+extern-crate = { path = "tests/extern_crate" }
+
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+pollster = { version = "0.4", features = ["macro"] }
+
+[package]
+name = "static-dispatch"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+macros.workspace = true
+
+[dev-dependencies]
+extern-crate.workspace = true
+pollster.workspace = true
