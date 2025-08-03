@@ -1,11 +1,22 @@
 [workspace]
 members = [".", "macros", "tests/extern_crate"]
-package.version = "0.1.0"
-package.edition = "2024"
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+
+authors = ["Anton Wetzel"]
+description = "Implement a trait for an enum, where all variants implement the trait"
+readme = "readme.md"
+license = "MIT"
+documentation = "http://github.com/antonWetzel/static-dispatch"
+repository = "http://github.com/antonWetzel/static-dispatch"
 
 [workspace.dependencies]
 static-dispatch = { path = "." }
-macros = { path = "macros" }
+static-dispatch-macros = { path = "macros", version = "0.1.0" }
 extern-crate = { path = "tests/extern_crate" }
 
 proc-macro2 = "1.0"
@@ -17,9 +28,17 @@ pollster = { version = "0.4", features = ["macro"] }
 name = "static-dispatch"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+
+authors.workspace = true
+description.workspace = true
+readme.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
 
 [dependencies]
-macros.workspace = true
+static-dispatch-macros.workspace = true
 
 [dev-dependencies]
 extern-crate.workspace = true

@@ -1,6 +1,6 @@
 # Static Dispatch
 
-Implement a trait for an enum, where all variants implement the trait.
+Derive a trait for an enum, where all variants implement the trait.
 
 ```rust
 #[static_dispatch::dispatch]
@@ -47,6 +47,14 @@ async fn example() {
     }
 }
 ```
+## Overview
+
+- Annotate the trait with `static_dispatch::dispatch`
+    - This generates a macro with `macro_rules`
+    - Use `static_dispatch::dispatch(macro_export)` to export the macro 
+- Annotate the struct with `static_dispatch::dispatch(<TraitName>)`
+    - This invokes the macro to generate the trait implementation
+    - Use `static_dispatch::dispatch(<crate>::<TraitName>)` for use with `macro_export`
 
 ## Supported
 

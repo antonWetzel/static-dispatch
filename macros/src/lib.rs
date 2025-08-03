@@ -17,9 +17,7 @@ pub fn dispatch(attr: TokenStream, item: TokenStream) -> TokenStream {
     } else if let Ok(input_trait) = syn::parse2(item.clone()) {
         dispatch_enum(attr, input_trait)
     } else {
-        Error::new_spanned(&item, "Could not parse as trait or enum")
-            .to_compile_error()
-            .into()
+        Error::new_spanned(&item, "Could not parse as trait or enum").to_compile_error()
     };
 
     quote! {
@@ -95,16 +93,11 @@ fn create_trait_item_macro(
         true => quote! { .await },
     };
 
-    match &sig.output {
-        ReturnType::Type(_, ty) => match ty.as_ref() {
-            Type::ImplTrait(impl_trait) => {
-                return Error::new_spanned(impl_trait, "Return impl is not supported")
-                    .to_compile_error();
-            }
-            _ => {}
-        },
-        _ => {}
-    };
+    if let ReturnType::Type(_, ty) = &sig.output
+        && let Type::ImplTrait(impl_trait) = ty.as_ref()
+    {
+        return Error::new_spanned(impl_trait, "Return impl is not supported").to_compile_error();
+    }
 
     let remaining_inputs = sig.inputs.iter().skip(1).map(|arg| match arg {
         FnArg::Receiver(rec) => {
@@ -146,8 +139,7 @@ fn dispatch_trait(attr: TokenStream, input: ItemTrait) -> proc_macro2::TokenStre
         };
         if ident != "macro_export" {
             return Error::new_spanned(&ident, "Only \"macro_export\" is allowed as attribute.")
-                .to_compile_error()
-                .into();
+                .to_compile_error();
         }
         true
     };
@@ -188,7 +180,6 @@ fn dispatch_trait(attr: TokenStream, input: ItemTrait) -> proc_macro2::TokenStre
         }
         #use_statement
     }
-    .into()
 }
 
 fn edit_trait_path(trait_path: &mut Path) -> Result<(), proc_macro2::TokenStream> {
@@ -199,9 +190,7 @@ fn edit_trait_path(trait_path: &mut Path) -> Result<(), proc_macro2::TokenStream
             Ok(())
         }
         None => Err(
-            Error::new_spanned(trait_path, "Name or Path of the trait required")
-                .to_compile_error()
-                .into(),
+            Error::new_spanned(trait_path, "Name or Path of the trait required").to_compile_error(),
         ),
     }
 }
@@ -215,8 +204,7 @@ fn dispatch_enum(attr: TokenStream, input: ItemEnum) -> proc_macro2::TokenStream
 
     let Ok(mut trait_path) = syn::parse2::<Path>(attr.clone()) else {
         return Error::new_spanned(attr, "Path or impl trait for type signature expected")
-            .to_compile_error()
-            .into();
+            .to_compile_error();
     };
     if let Err(err) = edit_trait_path(&mut trait_path) {
         return err;

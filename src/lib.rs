@@ -1,3 +1,3 @@
 #![doc = include_str!("../readme.md")]
 #![no_std]
-pub use macros::dispatch;
+pub use static_dispatch_macros::dispatch;
