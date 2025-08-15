@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use syn::{
     Error, FnArg, GenericParam, Generics, Ident, ItemEnum, ItemTrait, Path, PathArguments,
-    ReturnType, TraitItem, TraitItemFn, Type, TypeGenerics, TypeReference,
+    ReturnType, Token, TraitItem, TraitItemFn, Type, TypeGenerics, TypeReference, parse::Parse,
 };
 
 #[proc_macro_attribute]
@@ -70,6 +70,7 @@ fn create_trait_item_macro(
     trait_name: &Ident,
     trait_generic: &TypeGenerics,
     method: &TraitItemFn,
+    long_form: bool,
 ) -> proc_macro2::TokenStream {
     let TraitItemFn {
         attrs,
@@ -111,11 +112,16 @@ fn create_trait_item_macro(
 
     let generics = generics_for_method(&sig.generics);
 
+    let trait_type = match long_form {
+        false => quote! { #trait_name #trait_generic },
+        true => quote! { $trait_type },
+    };
+
     quote! {
         #(#attrs)* #sig {
             match self {
                 $(
-                    Self::$variant_name(__static_dispatch_value) => <$variant_type as #trait_name #trait_generic>::#name #generics(
+                    Self::$variant_name(__static_dispatch_value) => <$variant_type as #trait_type>::#name #generics(
                         __static_dispatch_value
                         #(#remaining_inputs)*
                     )#suffix,
@@ -148,8 +154,13 @@ fn dispatch_trait(attr: TokenStream, input: ItemTrait) -> proc_macro2::TokenStre
     let macro_name = macro_name(trait_name);
     let (impl_generics, ty_generics, where_clause) = &input.generics.split_for_impl();
 
-    let items = input.items.iter().map(|item| match item {
-        TraitItem::Fn(method) => create_trait_item_macro(trait_name, ty_generics, method),
+    let short_items = input.items.iter().map(|item| match item {
+        TraitItem::Fn(method) => create_trait_item_macro(trait_name, ty_generics, method, false),
+        item => Error::new_spanned(item, "Only methods are supported").to_compile_error(),
+    });
+
+    let long_items = input.items.iter().map(|item| match item {
+        TraitItem::Fn(method) => create_trait_item_macro(trait_name, ty_generics, method, true),
         item => Error::new_spanned(item, "Only methods are supported").to_compile_error(),
     });
 
@@ -169,12 +180,25 @@ fn dispatch_trait(attr: TokenStream, input: ItemTrait) -> proc_macro2::TokenStre
         #export_prefix
         macro_rules! #macro_name {
             (
+                short
                 $vis:vis enum $name:ident {
                     $($variant_name:ident($variant_type:ty),)*
                 }
             ) => {
                 impl #impl_generics #trait_name #ty_generics for $name #where_clause {
-                    #(#items)*
+                    #(#short_items)*
+                }
+            };
+            (
+                long
+                $trait_type:ty
+                {
+                    $($variant_name:ident($variant_type:ty),)*
+                }
+                $($rem:tt)*
+            ) => {
+                $($rem)* {
+                    #(#long_items)*
                 }
             };
         }
@@ -195,6 +219,26 @@ fn edit_trait_path(trait_path: &mut Path) -> Result<(), proc_macro2::TokenStream
     }
 }
 
+struct LongImpl {
+    _impl: Token![impl],
+    generics: Generics,
+    trait_: Path,
+    _for: Token![for],
+    self_ty: Type,
+}
+
+impl Parse for LongImpl {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            _impl: input.parse()?,
+            generics: input.parse()?,
+            trait_: input.parse()?,
+            _for: input.parse()?,
+            self_ty: input.parse()?,
+        })
+    }
+}
+
 fn dispatch_enum(attr: TokenStream, input: ItemEnum) -> proc_macro2::TokenStream {
     let enum_name = &input.ident;
     let vis = &input.vis;
@@ -202,18 +246,43 @@ fn dispatch_enum(attr: TokenStream, input: ItemEnum) -> proc_macro2::TokenStream
 
     let attr = proc_macro2::TokenStream::from(attr);
 
-    let Ok(mut trait_path) = syn::parse2::<Path>(attr.clone()) else {
-        return Error::new_spanned(attr, "Path or impl trait for type signature expected")
-            .to_compile_error();
+    if let Ok(mut trait_path) = syn::parse2::<Path>(attr.clone()) {
+        if let Err(err) = edit_trait_path(&mut trait_path) {
+            return err;
+        }
+        return quote! {
+            #trait_path! {
+                short
+                #vis enum #enum_name {
+                    #(#variants,)*
+                }
+            }
+        };
+    }
+
+    let item_impl = match syn::parse2::<LongImpl>(attr) {
+        Ok(item_impl) => item_impl,
+        Err(err) => return err.into_compile_error(),
     };
+
+    let mut trait_path = item_impl.trait_.clone();
     if let Err(err) = edit_trait_path(&mut trait_path) {
         return err;
     }
+
+    let (impl_generics, _ty_generics, where_clause) = item_impl.generics.split_for_impl();
+    let trait_name = &item_impl.trait_;
+    let name = item_impl.self_ty;
+
     quote! {
+
         #trait_path! {
-            #vis enum #enum_name {
+            long
+            #trait_name
+            {
                 #(#variants,)*
             }
+            impl #impl_generics #trait_name for #name #where_clause
         }
     }
 }

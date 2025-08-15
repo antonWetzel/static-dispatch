@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "extern-crate"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "static-dispatch",
 ]
@@ -31,9 +31,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.95"
+version = "1.0.97"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02b3e5e68a3a1a02aad3ec490a98007cbc13c37cbe84a3cd7b8e406d76e7f778"
+checksum = "d61789d7719defeb74ea5fe81f2fdfdbd28a803847077cecce2ff14e1472f6f1"
 dependencies = [
  "unicode-ident",
 ]
@@ -49,7 +49,7 @@ dependencies = [
 
 [[package]]
 name = "static-dispatch"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "extern-crate",
  "pollster",
@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "static-dispatch-macros"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -67,9 +67,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.104"
+version = "2.0.105"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17b6f705963418cdb9927482fa304bc562ece2fdd4f616084c50b7023b435a40"
+checksum = "7bc3fcb250e53458e712715cf74285c1f889686520d79294a9ef3bd7aa1fc619"
 dependencies = [
  "proc-macro2",
  "quote",

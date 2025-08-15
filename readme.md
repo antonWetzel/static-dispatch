@@ -47,6 +47,7 @@ async fn example() {
     }
 }
 ```
+
 ## Overview
 
 - Annotate the trait with `static_dispatch::dispatch`
@@ -65,10 +66,43 @@ async fn example() {
 - Implement trait with multiple enums
 - Implement multiple traits for an enum
 
+## Example for generics
+
+```rust
+#[static_dispatch::dispatch]
+trait SomethingBehavior<V> {
+    fn something(&self, value: V);
+}
+
+struct A<'a>(&'a i32);
+
+impl<'a, V> SomethingBehavior<V> for A<'a> {
+    fn something(&self, _value: V) {}
+}
+
+struct B<T>(T);
+impl<T, V> SomethingBehavior<V> for B<T> {
+    fn something(&self, _value: V) {}
+}
+
+#[static_dispatch::dispatch(impl<'a, T, V> SomethingBehavior<V> for Something<'a, T>)]
+enum Something<'a, T> {
+    A(A<'a>),
+    B(B<T>),
+}
+
+#[test]
+fn generic_example() {
+    let mut something = Something::A(A(&0));
+    something.something();
+    something = Something::B(B(0));
+    something.something();
+}
+```
+
 ## Not Supported
 
 - Use a type alias for the trait
-- Concrete implementation for a generic trait
 - Traits with items, which are not function with `self`, `&self` or `&mut self`
 - `impl` in return position
 

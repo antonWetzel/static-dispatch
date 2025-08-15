@@ -3,7 +3,7 @@ members = [".", "macros", "tests/extern_crate"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 
@@ -16,7 +16,7 @@ repository = "http://github.com/antonWetzel/static-dispatch"
 
 [workspace.dependencies]
 static-dispatch = { path = "." }
-static-dispatch-macros = { path = "macros", version = "0.1.0" }
+static-dispatch-macros = { path = "macros", version = "0.2.0" }
 extern-crate = { path = "tests/extern_crate" }
 
 proc-macro2 = "1.0"
