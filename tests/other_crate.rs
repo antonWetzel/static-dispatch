@@ -10,11 +10,13 @@ impl ExternBehavior for B {
     fn something(&self) {}
 }
 
-#[static_dispatch::dispatch(extern_crate::ExternBehavior)]
+#[static_dispatch::setup]
 enum Something {
     A(A),
     B(B),
 }
+
+static_dispatch::implementation!(extern_crate::ExternBehavior for Something);
 
 #[test]
 fn other_module() {

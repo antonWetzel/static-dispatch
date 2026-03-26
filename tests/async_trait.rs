@@ -1,4 +1,4 @@
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 #[allow(async_fn_in_trait)]
 trait AsyncBehavior {
     async fn something(&self) -> i32;
@@ -18,11 +18,13 @@ impl AsyncBehavior for B {
     }
 }
 
-#[static_dispatch::dispatch(AsyncBehavior)]
+#[static_dispatch::setup]
 enum Something {
     A(A),
     B(B),
 }
+
+static_dispatch::implementation!(AsyncBehavior for Something);
 
 #[pollster::test]
 async fn async_trait() {

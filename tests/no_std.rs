@@ -1,6 +1,6 @@
 #![no_std]
 
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 trait SomethingBehavior {
     fn something(&self);
 }
@@ -15,11 +15,13 @@ impl SomethingBehavior for B {
     fn something(&self) {}
 }
 
-#[static_dispatch::dispatch(SomethingBehavior)]
+#[static_dispatch::setup]
 enum Something {
     A(A),
     B(B),
 }
+
+static_dispatch::implementation!(SomethingBehavior for Something);
 
 #[test]
 fn rename() {

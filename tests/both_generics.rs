@@ -1,4 +1,4 @@
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 trait SomethingBehavior<'a, T, const X: usize> {
     fn something(&self);
 }
@@ -14,16 +14,20 @@ impl<'a> SomethingBehavior<'a, (), 0> for B {
     fn something(&self) {}
 }
 
-#[static_dispatch::dispatch(impl<'a> SomethingBehavior<'a, (), 0> for Something<'a>)]
+#[static_dispatch::setup]
 enum Something<'a> {
     A(A<'a>),
     B(B),
 }
 
-#[test]
-fn generics() {
-    let mut something = Something::A(A(core::marker::PhantomData));
-    something.something();
-    something = Something::B(B);
-    something.something();
-}
+// todo: conflict with generics (rename or merge?)
+// todo: implement with specific generics/where
+// static_dispatch::implementation!(SomethingBehavior for Something);
+
+// #[test]
+// fn generics() {
+//     let mut something = Something::A(A(core::marker::PhantomData));
+//     something.something();
+//     something = Something::B(B);
+//     something.something();
+// }

@@ -1,4 +1,4 @@
-#[static_dispatch::dispatch(macro_export)]
+#[static_dispatch::setup]
 pub trait ExternBehavior {
     fn something(&self);
 }

@@ -1,4 +1,4 @@
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 trait SomethingBehavior {
     fn something(&self);
 }
@@ -14,11 +14,13 @@ impl SomethingBehavior for B {
     fn something(&self) {}
 }
 
-#[static_dispatch::dispatch(impl<'a> SomethingBehavior for Something<'a>)]
+#[static_dispatch::setup]
 enum Something<'a> {
     A(A<'a>),
     B(B),
 }
+
+static_dispatch::implementation!(SomethingBehavior for Something);
 
 #[test]
 fn enum_generics() {

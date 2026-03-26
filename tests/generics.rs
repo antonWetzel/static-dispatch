@@ -1,4 +1,4 @@
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 trait SomethingBehavior<A, B: Copy>
 where
     A: Copy,
@@ -35,11 +35,13 @@ where
     }
 }
 
-#[static_dispatch::dispatch(SomethingBehavior)]
+#[static_dispatch::setup]
 enum Something {
     A(StructA),
     B(StructB),
 }
+
+static_dispatch::implementation!(SomethingBehavior for Something);
 
 #[test]
 fn generics() {

@@ -1,4 +1,4 @@
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 trait SomethingBehavior<const X: usize> {
     fn something(&self);
     fn another<const Y: usize>(&self);
@@ -16,11 +16,13 @@ impl<const X: usize> SomethingBehavior<X> for B {
     fn another<const Y: usize>(&self) {}
 }
 
-#[static_dispatch::dispatch(SomethingBehavior)]
+#[static_dispatch::setup]
 enum Something {
     A(A),
     B(B),
 }
+
+static_dispatch::implementation!(SomethingBehavior for Something);
 
 #[test]
 fn generics() {

@@ -3,12 +3,11 @@ name = "static-dispatch-macros"
 version.workspace = true
 edition.workspace = true
 
-authors.workspace = true
 description.workspace = true
-readme.workspace = true
-license.workspace = true
 documentation.workspace = true
+readme.workspace = true
 repository.workspace = true
+license.workspace = true
 
 [lib]
 proc-macro = true

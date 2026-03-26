@@ -1,4 +1,4 @@
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 trait ImplicitSelfBehavior {
     fn as_value(self);
     fn as_ref(&self);
@@ -19,11 +19,13 @@ impl ImplicitSelfBehavior for B {
     fn as_mut(self: &mut Self) {}
 }
 
-#[static_dispatch::dispatch(ImplicitSelfBehavior)]
+#[static_dispatch::setup]
 enum ImplicitSelf {
     A(A),
     B(B),
 }
+
+static_dispatch::implementation!(ImplicitSelfBehavior for ImplicitSelf);
 
 #[test]
 fn implicit_self() {

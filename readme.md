@@ -3,7 +3,7 @@
 Derive a trait for an enum, where all variants implement the trait.
 
 ```rust
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 trait ExampleBehavior {
     fn as_value(self);
     fn as_ref(&self) {}
@@ -25,11 +25,13 @@ impl ExampleBehavior for B {
     // ...
 }
 
-#[static_dispatch::dispatch(ExampleBehavior)]
+#[static_dispatch::setup]
 enum Example {
     A(A),
     B(B),
 }
+
+static_dispatch::implementation!(ExampleBehavior for Example);
 
 async fn example() {
     for mut value in [
@@ -69,7 +71,7 @@ async fn example() {
 ## Example for generics
 
 ```rust
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 trait SomethingBehavior<V> {
     fn something(&self, value: V);
 }
@@ -85,18 +87,22 @@ impl<T, V> SomethingBehavior<V> for B<T> {
     fn something(&self, _value: V) {}
 }
 
-#[static_dispatch::dispatch(impl<'a, T, V> SomethingBehavior<V> for Something<'a, T>)]
+#[static_dispatch::setup()]
 enum Something<'a, T> {
     A(A<'a>),
     B(B<T>),
 }
 
+// Rework in progress:
+// impl<'a, T, V> SomethingBehavior<V> for Something<'a, T>
+// static_dispatch::implementation!(SomethingBehavior for Something);
+
 #[test]
 fn generic_example() {
-    let mut something = Something::A(A(&0));
-    something.something();
-    something = Something::B(B(0));
-    something.something();
+    // let mut something = Something::A(A(&0));
+    // something.something();
+    // something = Something::B(B(0));
+    // something.something();
 }
 ```
 

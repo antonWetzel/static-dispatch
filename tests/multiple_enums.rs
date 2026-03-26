@@ -1,4 +1,4 @@
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 trait SomethingBehavior {
     fn something(&self);
 }
@@ -13,17 +13,21 @@ impl SomethingBehavior for B {
     fn something(&self) {}
 }
 
-#[static_dispatch::dispatch(SomethingBehavior)]
+#[static_dispatch::setup]
 enum First {
     A(A),
     B(B),
 }
 
-#[static_dispatch::dispatch(SomethingBehavior)]
+static_dispatch::implementation!(SomethingBehavior for First);
+
+#[static_dispatch::setup]
 enum Second {
     A(A),
     B(B),
 }
+
+static_dispatch::implementation!(SomethingBehavior for Second);
 
 #[test]
 fn multiple_enums() {

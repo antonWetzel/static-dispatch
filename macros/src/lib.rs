@@ -3,131 +3,291 @@ use std::ops::Not;
 use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Error, FnArg, GenericParam, Generics, Ident, ItemEnum, ItemTrait, Path, PathArguments,
-    ReturnType, Token, TraitItem, TraitItemFn, Type, TypeGenerics, TypeReference, parse::Parse,
+    Error, Fields, FnArg, GenericParam, Generics, Ident, Item, ItemEnum, ItemTrait, Path,
+    PathArguments, ReturnType, Token, TraitItem, TraitItemFn, Type, TypeGenerics, TypeParam,
+    TypeReference, WhereClause, WherePredicate, parenthesized,
+    parse::Parse,
+    parse_macro_input,
+    token::{self, Paren, SelfValue},
 };
 
-#[proc_macro_attribute]
+/// Setup this type for static dispatch with [`implementation`].
+///
 /// See the module for documentation.
-pub fn dispatch(attr: TokenStream, item: TokenStream) -> TokenStream {
+#[proc_macro_attribute]
+pub fn setup(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = item.clone();
     let item = proc_macro2::TokenStream::from(item);
 
-    let output = if let Ok(input_trait) = syn::parse2(item.clone()) {
-        dispatch_trait(attr, input_trait)
-    } else if let Ok(input_trait) = syn::parse2(item.clone()) {
-        dispatch_enum(attr, input_trait)
-    } else {
-        Error::new_spanned(&item, "Could not parse as trait or enum").to_compile_error()
+    // todo: avoid double parse, we just need the name
+    let input = parse_macro_input!(input as Item);
+    let name = match &input {
+        Item::Trait(value) => &value.ident,
+        Item::Enum(value) => &value.ident,
+        _ => {
+            return Error::new_spanned(&input, "dispatch is only valid on traits or enums")
+                .to_compile_error()
+                .into();
+        }
     };
+    let name = macro_name(name);
 
     quote! {
         #item
-        #output
+
+        #[doc(hidden)]
+        #[macro_export]
+        macro_rules! #name {
+            ($target:path, $context:tt) => {
+                $target!($context, (#input));
+            };
+        }
     }
     .into()
 }
 
-fn is_self_type(ty: &Type) -> bool {
-    match ty {
-        // Check for plain `Self`
-        Type::Path(type_path) => {
-            type_path.qself.is_none()
-                && type_path.path.segments.len() == 1
-                && type_path.path.segments[0].ident == "Self"
-                && matches!(type_path.path.segments[0].arguments, PathArguments::None)
-        }
-        // Check for `&Self` or `&mut Self`
-        Type::Reference(TypeReference { elem, .. }) => is_self_type(elem),
-        _ => false,
+struct GenerateInput {
+    trait_name: Path,
+    _for: Token![for],
+    enum_name: Path,
+}
+
+impl Parse for GenerateInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            trait_name: input.parse()?,
+            _for: input.parse()?,
+            enum_name: input.parse()?,
+        })
     }
 }
 
-fn is_valid_self(arg: Option<&FnArg>) -> bool {
-    let Some(FnArg::Receiver(receiver)) = arg else {
-        return false;
-    };
-    receiver.colon_token.is_none() || is_self_type(&receiver.ty)
-}
+/// Todo: ...
+#[proc_macro]
+pub fn implementation(input: TokenStream) -> TokenStream {
+    let mut input = parse_macro_input!(input as GenerateInput);
 
-fn generics_for_method(generics: &Generics) -> proc_macro2::TokenStream {
-    let mut generics = generics.params.iter().filter_map(|generic| match generic {
-        GenericParam::Lifetime(_) => None,
-        GenericParam::Const(const_generic) => Some(&const_generic.ident),
-        GenericParam::Type(type_generic) => Some(&type_generic.ident),
-    });
-    let Some(first) = generics.next() else {
-        return proc_macro2::TokenStream::new();
-    };
-    let mut res = quote! {::<#first};
-    for generic in generics {
-        quote! {, #generic}.to_tokens(&mut res);
-    }
-    quote! {>}.to_tokens(&mut res);
-    res
-}
-
-fn create_trait_item_macro(
-    trait_name: &Ident,
-    trait_generic: &TypeGenerics,
-    method: &TraitItemFn,
-    long_form: bool,
-) -> proc_macro2::TokenStream {
-    let TraitItemFn {
-        attrs,
-        sig,
-        default: _,
-        semi_token: _,
-    } = method;
-
-    let name = &sig.ident;
-
-    if is_valid_self(sig.inputs.first()).not() {
-        return Error::new_spanned(
-            method,
-            "Only methods with `self`, `&self` or `&mut self` are supported",
-        )
-        .to_compile_error();
-    }
-
-    let suffix = match sig.asyncness.is_some() {
-        false => quote! {},
-        true => quote! { .await },
-    };
-
-    if let ReturnType::Type(_, ty) = &sig.output
-        && let Type::ImplTrait(impl_trait) = ty.as_ref()
-    {
-        return Error::new_spanned(impl_trait, "Return impl is not supported").to_compile_error();
-    }
-
-    let remaining_inputs = sig.inputs.iter().skip(1).map(|arg| match arg {
-        FnArg::Receiver(rec) => {
-            Error::new_spanned(rec, "Self only as first argument please").to_compile_error()
-        }
-        FnArg::Typed(typed) => {
-            let name = typed.pat.as_ref();
-            quote! { , #name }
-        }
-    });
-
-    let generics = generics_for_method(&sig.generics);
-
-    let trait_type = match long_form {
-        false => quote! { #trait_name #trait_generic },
-        true => quote! { $trait_type },
-    };
+    let trait_path = input.trait_name.clone();
+    edit_trait_path(&mut input.trait_name);
+    edit_trait_path(&mut input.enum_name);
+    let macros = [&input.trait_name, &input.enum_name].into_iter();
 
     quote! {
-        #(#attrs)* #sig {
-            match self {
-                $(
-                    Self::$variant_name(__static_dispatch_value) => <$variant_type as #trait_type>::#name #generics(
-                        __static_dispatch_value
-                        #(#remaining_inputs)*
-                    )#suffix,
-                )*
+        static_dispatch::dispatch_helper!(__arg, static_dispatch::generate_final, (#(#macros,)*), ((#trait_path),));
+    }
+    .into()
+}
+
+#[derive(Debug)]
+struct FinalInput {
+    _args_param: Paren,
+    args_item: Path,
+    _args_comma: Token![,],
+
+    _trait_param: Paren,
+    trait_item: ItemTrait,
+    _trait_comma: Token![,],
+
+    _enum_param: Paren,
+    enum_item: ItemEnum,
+    _enum_comma: Token![,],
+}
+
+impl Parse for FinalInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let args_content;
+        let trait_content;
+        let enum_content;
+        Ok(Self {
+            _args_param: parenthesized!(args_content in input),
+            args_item: args_content.parse()?,
+            _args_comma: input.parse()?,
+
+            _trait_param: parenthesized!(trait_content in input),
+            trait_item: trait_content.parse()?,
+            _trait_comma: input.parse()?,
+
+            _enum_param: parenthesized!(enum_content in input),
+            enum_item: enum_content.parse()?,
+            _enum_comma: input.parse()?,
+        })
+    }
+}
+
+/// This macro is designed to be called by other macros, not in normal code.
+///
+/// See the module for documentation.
+#[doc(hidden)]
+#[proc_macro]
+pub fn generate_final(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as FinalInput);
+    let trait_item = input.trait_item;
+    let enum_item = input.enum_item;
+
+    let trait_ident = &trait_item.ident;
+    let enum_ident = &enum_item.ident;
+
+    // Combine generic parameters from trait and enum.
+    let mut all_params = Vec::new();
+    for param in &trait_item.generics.params {
+        all_params.push(param.clone());
+    }
+    for param in &enum_item.generics.params {
+        all_params.push(param.clone());
+    }
+    all_params.sort_by_key(|param| match param {
+        GenericParam::Lifetime(_) => 0,
+        GenericParam::Const(_) => 1,
+        GenericParam::Type(_) => 2,
+    });
+
+    let impl_generics = if all_params.is_empty() {
+        quote! {}
+    } else {
+        quote! { < #(#all_params),* > }
+    };
+
+    // Combine where clauses from trait and enum.
+    let mut where_predicates = Vec::new();
+    if let Some(wc) = &trait_item.generics.where_clause {
+        where_predicates.extend(wc.predicates.iter().cloned());
+    }
+    if let Some(wc) = &enum_item.generics.where_clause {
+        where_predicates.extend(wc.predicates.iter().cloned());
+    }
+    all_params.sort_by_key(|param| match param {
+        GenericParam::Lifetime(_) => 0,
+        GenericParam::Const(_) => 1,
+        GenericParam::Type(_) => 2,
+    });
+
+    let where_clause = if where_predicates.is_empty() {
+        None
+    } else {
+        Some(WhereClause {
+            where_token: syn::token::Where::default(),
+            predicates: syn::punctuated::Punctuated::from_iter(where_predicates),
+        })
+    };
+    let trait_args = generic_args(&trait_item.generics);
+    let enum_args = generic_args(&enum_item.generics);
+
+    // Generate methods
+    let impl_methods = trait_item
+        .items
+        .iter()
+        .map(|item| {
+            let TraitItem::Fn(method) = item else {
+                return Error::new_spanned(item, "Only methods are supported").to_compile_error();
+            };
+            let sig = &method.sig;
+            let method_name = &sig.ident;
+            let method_gen = sig
+                .generics
+                .params
+                .iter()
+                .filter_map(|param| match param {
+                    GenericParam::Lifetime(_) => None,
+                    GenericParam::Const(param) => Some(&param.ident),
+                    GenericParam::Type(param) => Some(&param.ident),
+                })
+                .collect::<Vec<_>>();
+
+            let mut args = sig.inputs.iter();
+            let self_arg = match args.next() {
+                Some(FnArg::Receiver(rec)) => &rec.self_token,
+                _ => {
+                    return Error::new_spanned(sig, "Function requires self argument")
+                        .to_compile_error();
+                }
+            };
+
+            let args = sig
+                .inputs
+                .iter()
+                .skip(1)
+                .map(|arg| {
+                    if let syn::FnArg::Typed(pat_type) = arg {
+                        if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+                            pat_ident.ident.clone()
+                        } else {
+                            panic!("Unsupported argument pattern");
+                        }
+                    } else {
+                        panic!("Expected typed argument");
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let async_suffix = match sig.asyncness {
+                None => quote! {},
+                Some(_) => quote! {.await},
+            };
+
+            // Build match arms
+            let arms = enum_item
+                .variants
+                .iter()
+                .map(|variant| {
+                    let variant_ident = &variant.ident;
+                    let Fields::Unnamed(fields) = &variant.fields else {
+                        panic!("Only enum tuples supported");
+                    };
+                    let field = fields.unnamed.iter().next().expect("expected a field");
+                    let field_type = &field.ty;
+                    let method_gen = quote! { ::<#(#method_gen,)*> };
+                    quote! {
+                        #enum_ident::#variant_ident(__static_dispatch_value) =>
+                            <#field_type as #trait_ident #trait_args>::#method_name #method_gen(
+                            __static_dispatch_value,
+                            #(#args),*
+                        ) #async_suffix
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            quote! {
+                #sig {
+                    match #self_arg {
+                        #(#arms,)*
+                    }
+                }
             }
+        })
+        .collect::<Vec<_>>();
+
+    let expanded = quote! {
+        impl #impl_generics #trait_ident #trait_args for #enum_ident #enum_args #where_clause {
+            #(#impl_methods)*
         }
+    };
+
+    expanded.into()
+}
+
+fn generic_args(generics: &syn::Generics) -> proc_macro2::TokenStream {
+    let args: Vec<_> = generics
+        .params
+        .iter()
+        .map(|param| match param {
+            GenericParam::Type(ty) => {
+                let ident = &ty.ident;
+                quote! { #ident }
+            }
+            GenericParam::Lifetime(lifetime) => {
+                let lt = &lifetime.lifetime;
+                quote! { #lt }
+            }
+            GenericParam::Const(c) => {
+                let ident = &c.ident;
+                quote! { #ident }
+            }
+        })
+        .collect();
+    if args.is_empty() {
+        quote! {}
+    } else {
+        quote! { < #(#args),* > }
     }
 }
 
@@ -135,154 +295,12 @@ fn macro_name(ident: &Ident) -> Ident {
     format_ident!("{}_static_dispatch_macro", ident)
 }
 
-fn dispatch_trait(attr: TokenStream, input: ItemTrait) -> proc_macro2::TokenStream {
-    let export = if attr.is_empty() {
-        false
-    } else {
-        let ident = match syn::parse::<Ident>(attr) {
-            Ok(ident) => ident,
-            Err(err) => return err.to_compile_error(),
-        };
-        if ident != "macro_export" {
-            return Error::new_spanned(&ident, "Only \"macro_export\" is allowed as attribute.")
-                .to_compile_error();
-        }
-        true
-    };
-
-    let trait_name = &input.ident;
-    let macro_name = macro_name(trait_name);
-    let (impl_generics, ty_generics, where_clause) = &input.generics.split_for_impl();
-
-    let short_items = input.items.iter().map(|item| match item {
-        TraitItem::Fn(method) => create_trait_item_macro(trait_name, ty_generics, method, false),
-        item => Error::new_spanned(item, "Only methods are supported").to_compile_error(),
-    });
-
-    let long_items = input.items.iter().map(|item| match item {
-        TraitItem::Fn(method) => create_trait_item_macro(trait_name, ty_generics, method, true),
-        item => Error::new_spanned(item, "Only methods are supported").to_compile_error(),
-    });
-
-    let export_prefix = match export {
-        false => quote! {},
-        true => quote! { #[macro_export] },
-    };
-
-    let visibility = &input.vis;
-    let use_statement = match export {
-        false => quote! { #visibility use #macro_name; },
-        true => quote! {},
-    };
-
-    quote! {
-        /// This is just the macro static dispatch uses to create the implementation for the enum.
-        #export_prefix
-        macro_rules! #macro_name {
-            (
-                short
-                $vis:vis enum $name:ident {
-                    $($variant_name:ident($variant_type:ty),)*
-                }
-            ) => {
-                impl #impl_generics #trait_name #ty_generics for $name #where_clause {
-                    #(#short_items)*
-                }
-            };
-            (
-                long
-                $trait_type:ty
-                {
-                    $($variant_name:ident($variant_type:ty),)*
-                }
-                $($rem:tt)*
-            ) => {
-                $($rem)* {
-                    #(#long_items)*
-                }
-            };
-        }
-        #use_statement
-    }
-}
-
-fn edit_trait_path(trait_path: &mut Path) -> Result<(), proc_macro2::TokenStream> {
+fn edit_trait_path(trait_path: &mut Path) {
     match trait_path.segments.last_mut() {
         Some(segment) => {
             segment.ident = macro_name(&segment.ident);
             segment.arguments = PathArguments::None;
-            Ok(())
         }
-        None => Err(
-            Error::new_spanned(trait_path, "Name or Path of the trait required").to_compile_error(),
-        ),
-    }
-}
-
-struct LongImpl {
-    _impl: Token![impl],
-    generics: Generics,
-    trait_: Path,
-    _for: Token![for],
-    self_ty: Type,
-}
-
-impl Parse for LongImpl {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(Self {
-            _impl: input.parse()?,
-            generics: input.parse()?,
-            trait_: input.parse()?,
-            _for: input.parse()?,
-            self_ty: input.parse()?,
-        })
-    }
-}
-
-fn dispatch_enum(attr: TokenStream, input: ItemEnum) -> proc_macro2::TokenStream {
-    let enum_name = &input.ident;
-    let vis = &input.vis;
-    let variants = input.variants.iter();
-
-    let attr = proc_macro2::TokenStream::from(attr);
-
-    if let Ok(mut trait_path) = syn::parse2::<Path>(attr.clone()) {
-        if let Err(err) = edit_trait_path(&mut trait_path) {
-            return err;
-        }
-        return quote! {
-            #trait_path! {
-                short
-                #vis enum #enum_name {
-                    #(#variants,)*
-                }
-            }
-        };
-    }
-
-    let item_impl = match syn::parse2::<LongImpl>(attr) {
-        Ok(item_impl) => item_impl,
-        Err(err) => return err.into_compile_error(),
-    };
-
-    let mut trait_path = item_impl.trait_.clone();
-    if let Err(err) = edit_trait_path(&mut trait_path) {
-        return err;
-    }
-
-    let (impl_generics, _ty_generics, where_clause) = item_impl.generics.split_for_impl();
-    let trait_name = &item_impl.trait_;
-    let name = item_impl.self_ty;
-
-    quote! {
-
-        #trait_path! {
-            long
-            #trait_name
-            {
-                #(#variants,)*
-            }
-            impl #impl_generics #trait_name for #name #where_clause
-        }
+        None => panic!("path is empty"),
     }
 }

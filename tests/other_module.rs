@@ -1,7 +1,7 @@
 use crate::other_module::ExternBehavior;
 
 mod other_module {
-    #[static_dispatch::dispatch(macro_export)]
+    #[static_dispatch::setup]
     pub trait ExternBehavior {
         fn something(&self);
     }
@@ -17,11 +17,13 @@ impl ExternBehavior for B {
     fn something(&self) {}
 }
 
-#[static_dispatch::dispatch(ExternBehavior)]
+#[static_dispatch::setup]
 enum Something {
     A(A),
     B(B),
 }
+
+static_dispatch::implementation!(ExternBehavior for Something);
 
 #[test]
 fn other_module() {

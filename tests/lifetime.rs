@@ -1,4 +1,4 @@
-#[static_dispatch::dispatch]
+#[static_dispatch::setup]
 trait SomethingBehavior<'a> {
     fn something(&'a self);
     fn another<'b>(&'a self, _value: &'b ());
@@ -16,11 +16,13 @@ impl<'a> SomethingBehavior<'a> for B {
     fn another<'b>(&'a self, _value: &'b ()) {}
 }
 
-#[static_dispatch::dispatch(SomethingBehavior)]
+#[static_dispatch::setup]
 enum Something {
     A(A),
     B(B),
 }
+
+static_dispatch::implementation!(SomethingBehavior for Something);
 
 #[test]
 fn rename() {
