@@ -1,14 +1,8 @@
-use std::ops::Not;
-
 use proc_macro::TokenStream;
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote};
 use syn::{
-    Error, Fields, FnArg, GenericParam, Generics, Ident, Item, ItemEnum, ItemTrait, Path,
-    PathArguments, ReturnType, Token, TraitItem, TraitItemFn, Type, TypeGenerics, TypeParam,
-    TypeReference, WhereClause, WherePredicate, parenthesized,
-    parse::Parse,
-    parse_macro_input,
-    token::{self, Paren, SelfValue},
+    Error, Fields, FnArg, GenericParam, Ident, Item, ItemEnum, ItemTrait, Path, PathArguments,
+    Token, TraitItem, WhereClause, parenthesized, parse::Parse, parse_macro_input, token::Paren,
 };
 
 /// Setup this type for static dispatch with [`implementation`].
@@ -62,28 +56,29 @@ impl Parse for GenerateInput {
     }
 }
 
-/// Todo: ...
+/// Syntax: `implementation!(<trait> for <enum>)`
+///
+/// Generate the trait implementation for the enum.
+/// Both require a `![setup]` annotation.
+///
+/// Because this uses macros to read the data, use `<crate>::<name>`
+/// for external types.
 #[proc_macro]
 pub fn implementation(input: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(input as GenerateInput);
 
-    let trait_path = input.trait_name.clone();
     edit_trait_path(&mut input.trait_name);
     edit_trait_path(&mut input.enum_name);
     let macros = [&input.trait_name, &input.enum_name].into_iter();
 
     quote! {
-        static_dispatch::dispatch_helper!(__arg, static_dispatch::generate_final, (#(#macros,)*), ((#trait_path),));
+        static_dispatch::dispatch_helper!(__arg, static_dispatch::generate_final, (#(#macros,)*), ());
     }
     .into()
 }
 
 #[derive(Debug)]
 struct FinalInput {
-    _args_param: Paren,
-    args_item: Path,
-    _args_comma: Token![,],
-
     _trait_param: Paren,
     trait_item: ItemTrait,
     _trait_comma: Token![,],
@@ -95,14 +90,9 @@ struct FinalInput {
 
 impl Parse for FinalInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let args_content;
         let trait_content;
         let enum_content;
         Ok(Self {
-            _args_param: parenthesized!(args_content in input),
-            args_item: args_content.parse()?,
-            _args_comma: input.parse()?,
-
             _trait_param: parenthesized!(trait_content in input),
             trait_item: trait_content.parse()?,
             _trait_comma: input.parse()?,

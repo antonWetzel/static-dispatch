@@ -1,3 +1,5 @@
+#![expect(unused)]
+
 #[static_dispatch::setup]
 trait SomethingBehavior<'a, T, const X: usize> {
     fn something(&self);
