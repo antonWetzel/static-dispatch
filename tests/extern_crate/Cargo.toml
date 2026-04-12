@@ -2,6 +2,7 @@
 name = "extern-crate"
 version.workspace = true
 edition.workspace = true
+publish = false
 
 [dependencies]
 static-dispatch.workspace = true

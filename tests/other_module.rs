@@ -23,7 +23,7 @@ enum Something {
     B(B),
 }
 
-static_dispatch::implementation!(ExternBehavior for Something);
+static_dispatch::implementation!(other_module::ExternBehavior for Something);
 
 #[test]
 fn other_module() {

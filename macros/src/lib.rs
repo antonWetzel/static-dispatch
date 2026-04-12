@@ -1,8 +1,9 @@
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
+use proc_macro2::Span;
+use quote::{ToTokens, quote};
 use syn::{
-    Error, Fields, FnArg, GenericParam, Ident, Item, ItemEnum, ItemTrait, Path, PathArguments,
-    Token, TraitItem, WhereClause, parenthesized, parse::Parse, parse_macro_input, token::Paren,
+    Error, Fields, FnArg, GenericParam, Item, ItemEnum, ItemTrait, Path, Token, TraitItem,
+    WhereClause, parse::Parse, parse_macro_input,
 };
 
 /// Setup this type for static dispatch with [`implementation`].
@@ -10,11 +11,8 @@ use syn::{
 /// See the module for documentation.
 #[proc_macro_attribute]
 pub fn setup(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let input = item.clone();
-    let item = proc_macro2::TokenStream::from(item);
-
     // todo: avoid double parse, we just need the name
-    let input = parse_macro_input!(input as Item);
+    let input = parse_macro_input!(item as Item);
     let name = match &input {
         Item::Trait(value) => &value.ident,
         Item::Enum(value) => &value.ident,
@@ -24,18 +22,12 @@ pub fn setup(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 .into();
         }
     };
-    let name = macro_name(name);
+
+    let save = macro_data::save(name, &input);
 
     quote! {
-        #item
-
-        #[doc(hidden)]
-        #[macro_export]
-        macro_rules! #name {
-            ($target:path, $context:tt) => {
-                $target!($context, (#input));
-            };
-        }
+        #input
+        #save
     }
     .into()
 }
@@ -65,41 +57,37 @@ impl Parse for GenerateInput {
 /// for external types.
 #[proc_macro]
 pub fn implementation(input: TokenStream) -> TokenStream {
-    let mut input = parse_macro_input!(input as GenerateInput);
+    let input = parse_macro_input!(input as GenerateInput);
 
-    edit_trait_path(&mut input.trait_name);
-    edit_trait_path(&mut input.enum_name);
-    let macros = [&input.trait_name, &input.enum_name].into_iter();
+    let data = FinalTransfer {
+        trait_item: macro_data::request(&input.trait_name),
+        comma: syn::token::Comma(Span::mixed_site()),
+        enum_item: macro_data::request(&input.enum_name),
+    };
 
-    quote! {
-        static_dispatch::dispatch_helper!(__arg, static_dispatch::generate_final, (#(#macros,)*), ());
+    macro_data::transfer("static_dispatch", "generate_final", &data).into()
+}
+
+struct FinalTransfer<S: macro_data::Storage> {
+    trait_item: macro_data::Transfer<ItemTrait, S>,
+    comma: Token![,],
+    enum_item: macro_data::Transfer<ItemEnum, S>,
+}
+
+impl ToTokens for FinalTransfer<macro_data::Request> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        self.trait_item.to_tokens(tokens);
+        self.comma.to_tokens(tokens);
+        self.enum_item.to_tokens(tokens);
     }
-    .into()
 }
 
-#[derive(Debug)]
-struct FinalInput {
-    _trait_param: Paren,
-    trait_item: ItemTrait,
-    _trait_comma: Token![,],
-
-    _enum_param: Paren,
-    enum_item: ItemEnum,
-    _enum_comma: Token![,],
-}
-
-impl Parse for FinalInput {
+impl Parse for FinalTransfer<macro_data::Load> {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let trait_content;
-        let enum_content;
         Ok(Self {
-            _trait_param: parenthesized!(trait_content in input),
-            trait_item: trait_content.parse()?,
-            _trait_comma: input.parse()?,
-
-            _enum_param: parenthesized!(enum_content in input),
-            enum_item: enum_content.parse()?,
-            _enum_comma: input.parse()?,
+            trait_item: input.parse()?,
+            comma: input.parse()?,
+            enum_item: input.parse()?,
         })
     }
 }
@@ -110,9 +98,9 @@ impl Parse for FinalInput {
 #[doc(hidden)]
 #[proc_macro]
 pub fn generate_final(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as FinalInput);
-    let trait_item = input.trait_item;
-    let enum_item = input.enum_item;
+    let input = parse_macro_input!(input as FinalTransfer<macro_data::Load>);
+    let trait_item = input.trait_item.0;
+    let enum_item = input.enum_item.0;
 
     let trait_ident = &trait_item.ident;
     let enum_ident = &enum_item.ident;
@@ -278,19 +266,5 @@ fn generic_args(generics: &syn::Generics) -> proc_macro2::TokenStream {
         quote! {}
     } else {
         quote! { < #(#args),* > }
-    }
-}
-
-fn macro_name(ident: &Ident) -> Ident {
-    format_ident!("{}_static_dispatch_macro", ident)
-}
-
-fn edit_trait_path(trait_path: &mut Path) {
-    match trait_path.segments.last_mut() {
-        Some(segment) => {
-            segment.ident = macro_name(&segment.ident);
-            segment.arguments = PathArguments::None;
-        }
-        None => panic!("path is empty"),
     }
 }

@@ -13,6 +13,7 @@ license.workspace = true
 proc-macro = true
 
 [dependencies]
+macro-data = { workspace = true, features = ["proc-macro"] }
 proc-macro2.workspace = true
 quote.workspace = true
 syn.workspace = true

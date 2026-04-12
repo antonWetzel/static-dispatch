@@ -15,7 +15,7 @@ resolver = "3"
 members = [".", "macros", "tests/extern_crate"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.88"
 
@@ -28,14 +28,16 @@ license = "MIT"
 [workspace.dependencies]
 extern-crate = { path = "tests/extern_crate" }
 static-dispatch = { path = "." }
-static-dispatch-macros = { path = "macros", version = "0.2.0" }
+static-dispatch-macros = { path = "macros", version = "0.3.0" }
 
+macro-data = "0.1"
 pollster = { version = "0.4", features = ["macro"] }
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = ["extra-traits", "full"] }
 
 [dependencies]
+macro-data.workspace = true
 static-dispatch-macros.workspace = true
 
 [dev-dependencies]

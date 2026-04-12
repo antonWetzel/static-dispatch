@@ -97,7 +97,6 @@ enum Something<'a, T> {
 // impl<'a, T, V> SomethingBehavior<V> for Something<'a, T>
 // static_dispatch::implementation!(SomethingBehavior for Something);
 
-#[test]
 fn generic_example() {
     // let mut something = Something::A(A(&0));
     // something.something();
